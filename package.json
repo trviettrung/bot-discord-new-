@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "build:words": "node scripts/build-word-list.js",
+    "build:words": "node scripts/import-ver2-wordgraph.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],

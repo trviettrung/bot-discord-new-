@@ -44,10 +44,16 @@ function getConnectedVoiceChannelId(guildId) {
         ?.channelId || null;
 }
 
-async function connectToVoiceChannel(channel) {
+async function connectToVoiceChannel(
+    channel,
+    joinOwnerId
+) {
 
     const currentConnection =
         getVoiceConnection(channel.guild.id);
+
+    const currentSession =
+        sessions.get(channel.guild.id);
 
     let connection;
 
@@ -84,7 +90,11 @@ async function connectToVoiceChannel(channel) {
         {
             connection,
             voiceChannelId:
-                channel.id
+                channel.id,
+            joinOwnerId:
+                joinOwnerId ||
+                currentSession?.joinOwnerId ||
+                null
         }
     );
 
@@ -162,8 +172,31 @@ async function handleVoiceConnectInteraction(interaction) {
             });
         }
 
+        const session =
+            sessions.get(interaction.guild.id);
+
+        const connectedVoiceId =
+            getConnectedVoiceChannelId(
+                interaction.guild.id
+            );
+
+        if (
+            connectedVoiceId &&
+            connectedVoiceId === voiceChannel.id &&
+            session?.joinOwnerId &&
+            session.joinOwnerId !== interaction.user.id
+        ) {
+
+            return interaction.reply({
+                content:
+                    "Bot đang ở voice này rồi. Chỉ người đã thêm bot mới dùng được lệnh out.",
+                ephemeral: true
+            });
+        }
+
         await connectToVoiceChannel(
-            voiceChannel
+            voiceChannel,
+            interaction.user.id
         );
 
         return interaction.reply(
@@ -178,11 +211,26 @@ async function handleVoiceConnectInteraction(interaction) {
                 interaction.guild.id
             );
 
+        const session =
+            sessions.get(interaction.guild.id);
+
         if (!connectedVoiceId) {
 
             return interaction.reply({
                 content:
                     "Bot hiện không ở trong voice.",
+                ephemeral: true
+            });
+        }
+
+        if (
+            session?.joinOwnerId &&
+            session.joinOwnerId !== interaction.user.id
+        ) {
+
+            return interaction.reply({
+                content:
+                    "Chỉ người đã thêm bot vào voice mới có thể dùng lệnh này.",
                 ephemeral: true
             });
         }

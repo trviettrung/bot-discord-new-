@@ -7,7 +7,7 @@ const {
     getNextWordCount,
     checkConnect
 } = require(
-    "../games/wordconnect/checkWord"
+    "../games/wordconnect/wordGraph"
 );
 
 const fs = require("fs");

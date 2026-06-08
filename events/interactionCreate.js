@@ -16,7 +16,7 @@ const {
     isDeadWord,
     saveKnownWord
 } = require(
-    "../games/wordconnect/checkWord"
+    "../games/wordconnect/wordGraph"
 );
 
 const {
@@ -116,7 +116,7 @@ function getHelpMessage() {
         "Cho bot tham gia voice hiện tại của bạn.",
         "",
         "`/voiceconnect out`",
-        "Cho bot rời voice.",
+        "Cho bot rời voice. Chỉ người đã thêm bot mới dùng được.",
         "",
         "`/d-xhelp`",
         "Hiện danh sách lệnh và tác dụng.",
@@ -316,7 +316,7 @@ module.exports = {
 
                     return interaction.reply({
                         content:
-                            "Không thể bốc từ ngẫu nhiên vì words.txt đang trống.",
+                            "Không thể bốc từ ngẫu nhiên vì từ điển nối từ đang trống.",
                         ephemeral: true
                     });
                 }

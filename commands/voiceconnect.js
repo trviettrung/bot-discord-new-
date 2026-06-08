@@ -18,7 +18,7 @@ module.exports = {
                 sub
                     .setName("out")
                     .setDescription(
-                        "Cho bot rời voice"
+                        "Cho bot rời voice nếu bạn là người đã thêm bot"
                     )
             )
 };

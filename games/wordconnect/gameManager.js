@@ -8,48 +8,16 @@ const dataDir = path.join(
     "data"
 );
 
-const channelsFile = path.join(
-    dataDir,
-    "wordconnect-channels.json"
-);
-
 const gamesFile = path.join(
     dataDir,
     "wordconnect-games.json"
 );
 
 const games = loadGames();
-const channels = loadChannels();
 
 function normalizeGuildId(guildId) {
 
     return String(guildId || "");
-}
-
-function loadChannels() {
-
-    try {
-
-        if (
-            !fs.existsSync(channelsFile)
-        ) return {};
-
-        return JSON.parse(
-            fs.readFileSync(
-                channelsFile,
-                "utf8"
-            )
-        );
-
-    } catch (err) {
-
-        console.error(
-            "Không đọc được file lưu kênh wordconnect:",
-            err
-        );
-
-        return {};
-    }
 }
 
 function loadGames() {
@@ -83,25 +51,6 @@ function loadGames() {
     }
 }
 
-function saveChannels() {
-
-    fs.mkdirSync(
-        dataDir,
-        {
-            recursive: true
-        }
-    );
-
-    fs.writeFileSync(
-        channelsFile,
-        JSON.stringify(
-            channels,
-            null,
-            4
-        )
-    );
-}
-
 function saveGames() {
 
     fs.mkdirSync(
@@ -119,21 +68,6 @@ function saveGames() {
             4
         )
     );
-}
-
-function setChannel(
-    guildId,
-    channelId
-) {
-
-    channels[normalizeGuildId(guildId)] = channelId;
-
-    saveChannels();
-}
-
-function getChannel(guildId) {
-
-    return channels[normalizeGuildId(guildId)];
 }
 
 function createGame(
@@ -191,8 +125,6 @@ function deleteGame(guildId) {
 }
 
 module.exports = {
-    setChannel,
-    getChannel,
     createGame,
     getGame,
     saveGame,
