@@ -44,6 +44,39 @@ function getConnectedVoiceChannelId(guildId) {
         ?.channelId || null;
 }
 
+function isAbortError(error) {
+
+    return error?.code === "ABORT_ERR" ||
+        error?.name === "AbortError" ||
+        error?.cause?.code === "ABORT_ERR" ||
+        error?.cause?.name === "AbortError";
+}
+
+function getVoiceConnectErrorMessage(error) {
+
+    if (
+        isAbortError(error)
+    ) {
+
+        return "Kết nối voice bị Discord hoặc host hủy giữa chừng. Bạn thử dùng lại `/voiceconnect join`.";
+    }
+
+    return "Bot chưa kết nối được vào voice. Kiểm tra quyền voice rồi thử lại.";
+}
+
+function logVoiceConnectError(error) {
+
+    const reason =
+        error?.code ||
+        error?.name ||
+        error?.message ||
+        "unknown";
+
+    console.warn(
+        `Voice connect failed: ${reason}`
+    );
+}
+
 async function connectToVoiceChannel(
     channel,
     joinOwnerId
@@ -82,7 +115,33 @@ async function connectToVoiceChannel(
                     channel.guild.voiceAdapterCreator,
                 selfDeaf:
                     true
-            });
+        });
+    }
+
+    try {
+
+        await entersState(
+            connection,
+            VoiceConnectionStatus.Ready,
+            20_000
+        );
+
+    } catch (error) {
+
+        try {
+
+            connection.destroy();
+
+        } catch {
+
+            // Connection may already be destroyed by Discord.
+        }
+
+        sessions.delete(
+            channel.guild.id
+        );
+
+        throw error;
     }
 
     sessions.set(
@@ -96,12 +155,6 @@ async function connectToVoiceChannel(
                 currentSession?.joinOwnerId ||
                 null
         }
-    );
-
-    await entersState(
-        connection,
-        VoiceConnectionStatus.Ready,
-        20_000
     );
 
     return connection;
@@ -194,14 +247,31 @@ async function handleVoiceConnectInteraction(interaction) {
             });
         }
 
-        await connectToVoiceChannel(
-            voiceChannel,
-            interaction.user.id
-        );
+        await interaction.deferReply();
 
-        return interaction.reply(
-            `Bot đã tham gia voice **${voiceChannel.name}**.`
-        );
+        try {
+
+            await connectToVoiceChannel(
+                voiceChannel,
+                interaction.user.id
+            );
+
+            return interaction.editReply(
+                `Bot đã tham gia voice **${voiceChannel.name}**.`
+            );
+
+        } catch (error) {
+
+            logVoiceConnectError(
+                error
+            );
+
+            return interaction.editReply(
+                getVoiceConnectErrorMessage(
+                    error
+                )
+            );
+        }
     }
 
     if (sub === "out") {
