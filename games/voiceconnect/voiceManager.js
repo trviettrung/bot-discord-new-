@@ -41,10 +41,67 @@ const RECONNECT_DELAY_MS =
 
 class SilenceStream extends Readable {
 
+    constructor() {
+
+        super();
+
+        this.interval =
+            null;
+    }
+
     _read() {
 
-        this.push(
-            OPUS_SILENCE_FRAME
+        if (
+            this.interval
+        ) return;
+
+        this.interval =
+            setInterval(
+                () => {
+
+                    if (
+                        this.destroyed
+                    ) return;
+
+                    const canContinue =
+                        this.push(
+                            OPUS_SILENCE_FRAME
+                        );
+
+                    if (
+                        !canContinue
+                    ) {
+
+                        clearInterval(
+                            this.interval
+                        );
+
+                        this.interval =
+                            null;
+                    }
+                },
+                20
+            );
+
+        this.interval.unref?.();
+    }
+
+    _destroy(error, callback) {
+
+        if (
+            this.interval
+        ) {
+
+            clearInterval(
+                this.interval
+            );
+
+            this.interval =
+                null;
+        }
+
+        callback(
+            error
         );
     }
 }
