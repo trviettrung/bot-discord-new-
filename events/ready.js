@@ -1,9 +1,13 @@
+const {
+    Events
+} = require("discord.js");
+
 const botStatus =
     require("../config/status");
 
 module.exports = {
 
-    name: "ready",
+    name: Events.ClientReady,
 
     async execute(client) {
 
