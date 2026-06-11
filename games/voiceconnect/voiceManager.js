@@ -1,8 +1,4 @@
 const {
-    Readable
-} = require("stream");
-
-const {
     PermissionsBitField
 } = require("discord.js");
 
@@ -10,12 +6,7 @@ const {
     joinVoiceChannel,
     getVoiceConnection,
     entersState,
-    VoiceConnectionStatus,
-    createAudioPlayer,
-    createAudioResource,
-    StreamType,
-    NoSubscriberBehavior,
-    AudioPlayerStatus
+    VoiceConnectionStatus
 } = require("@discordjs/voice");
 
 const sessions =
@@ -24,87 +15,11 @@ const sessions =
 const watchedConnections =
     new WeakSet();
 
-const stoppedPlayers =
-    new WeakSet();
-
-const OPUS_SILENCE_FRAME =
-    Buffer.from([0xf8, 0xff, 0xfe]);
-
 const READY_TIMEOUT_MS =
-    20_000;
-
-const RECOVER_TIMEOUT_MS =
-    5_000;
+    15_000;
 
 const RECONNECT_DELAY_MS =
-    2_000;
-
-class SilenceStream extends Readable {
-
-    constructor() {
-
-        super();
-
-        this.interval =
-            null;
-    }
-
-    _read() {
-
-        if (
-            this.interval
-        ) return;
-
-        this.interval =
-            setInterval(
-                () => {
-
-                    if (
-                        this.destroyed
-                    ) return;
-
-                    const canContinue =
-                        this.push(
-                            OPUS_SILENCE_FRAME
-                        );
-
-                    if (
-                        !canContinue
-                    ) {
-
-                        clearInterval(
-                            this.interval
-                        );
-
-                        this.interval =
-                            null;
-                    }
-                },
-                20
-            );
-
-        this.interval.unref?.();
-    }
-
-    _destroy(error, callback) {
-
-        if (
-            this.interval
-        ) {
-
-            clearInterval(
-                this.interval
-            );
-
-            this.interval =
-                null;
-        }
-
-        callback(
-            error
-        );
-    }
-}
+    5_000;
 
 function getMemberVoiceChannel(interaction) {
 
@@ -152,7 +67,7 @@ function getVoiceConnectErrorMessage(error) {
         isAbortError(error)
     ) {
 
-        return "Kết nối voice bị Discord hoặc host hủy giữa chừng. Bạn thử dùng lại `/voiceconnect join`.";
+        return "Bot đã gửi yêu cầu vào voice nhưng Discord chưa xác nhận kịp. Nếu bot chưa vào, hãy thử lại `/voiceconnect join`.";
     }
 
     return "Bot chưa kết nối được vào voice. Kiểm tra quyền voice rồi thử lại.";
@@ -165,7 +80,7 @@ function logVoiceConnectError(error) {
     ) {
 
         console.warn(
-            "Voice ready check aborted; keeping connection alive."
+            "Voice ready check aborted; keeping passive connection."
         );
 
         return;
@@ -180,100 +95,6 @@ function logVoiceConnectError(error) {
     console.warn(
         `Voice connect failed: ${reason}`
     );
-}
-
-function createSilenceResource() {
-
-    return createAudioResource(
-        new SilenceStream(),
-        {
-            inputType:
-                StreamType.Opus
-        }
-    );
-}
-
-function createKeepAlivePlayer(guildId) {
-
-    const player =
-        createAudioPlayer({
-            behaviors: {
-                noSubscriber:
-                    NoSubscriberBehavior.Play
-            }
-        });
-
-    player.on(
-        AudioPlayerStatus.Idle,
-        () => {
-
-            if (
-                stoppedPlayers.has(player)
-            ) return;
-
-            player.play(
-                createSilenceResource()
-            );
-        }
-    );
-
-    player.on(
-        "error",
-        error => {
-
-            const reason =
-                error?.message ||
-                error?.code ||
-                "unknown";
-
-            console.warn(
-                `Voice keepalive failed (${guildId}): ${reason}`
-            );
-
-            if (
-                stoppedPlayers.has(player)
-            ) return;
-
-            player.play(
-                createSilenceResource()
-            );
-        }
-    );
-
-    player.play(
-        createSilenceResource()
-    );
-
-    return player;
-}
-
-function ensurePlayerPlaying(player) {
-
-    if (
-        player.state.status ===
-        AudioPlayerStatus.Idle
-    ) {
-
-        player.play(
-            createSilenceResource()
-        );
-    }
-}
-
-function stopPlayer(player) {
-
-    if (!player) return;
-
-    stoppedPlayers.add(player);
-
-    try {
-
-        player.stop(true);
-
-    } catch {
-
-        // Player may already be stopped.
-    }
 }
 
 function destroyConnection(connection) {
@@ -309,14 +130,62 @@ async function getSessionChannel(session) {
             session.voiceChannelId
         );
 
-    if (cachedChannel) {
-
-        return cachedChannel;
-    }
+    if (cachedChannel) return cachedChannel;
 
     return session.guild.channels
         .fetch(session.voiceChannelId)
         .catch(() => null);
+}
+
+function watchConnection(
+    connection,
+    guildId
+) {
+
+    if (
+        watchedConnections.has(connection)
+    ) return;
+
+    watchedConnections.add(
+        connection
+    );
+
+    connection.on(
+        "stateChange",
+        (_oldState, newState) => {
+
+            if (
+                newState.status ===
+                    VoiceConnectionStatus.Disconnected ||
+                newState.status ===
+                    VoiceConnectionStatus.Destroyed
+            ) {
+
+                scheduleReconnect(
+                    guildId,
+                    newState.status
+                );
+            }
+        }
+    );
+}
+
+async function waitUntilReady(connection) {
+
+    try {
+
+        await entersState(
+            connection,
+            VoiceConnectionStatus.Ready,
+            READY_TIMEOUT_MS
+        );
+
+    } catch (error) {
+
+        logVoiceConnectError(
+            error
+        );
+    }
 }
 
 async function reconnectSession(guildId) {
@@ -341,10 +210,6 @@ async function reconnectSession(guildId) {
         !botCanUseVoice(channel)
     ) {
 
-        stopPlayer(
-            session.player
-        );
-
         sessions.delete(guildId);
 
         return;
@@ -365,7 +230,7 @@ async function reconnectSession(guildId) {
 
         scheduleReconnect(
             guildId,
-            "reconnect failed"
+            "retry"
         );
     }
 }
@@ -397,121 +262,8 @@ function scheduleReconnect(
             },
             RECONNECT_DELAY_MS
         );
-}
 
-async function recoverDisconnectedConnection(
-    connection,
-    guildId
-) {
-
-    const session =
-        sessions.get(guildId);
-
-    if (
-        !session ||
-        session.connection !== connection ||
-        session.recovering
-    ) return;
-
-    session.recovering =
-        true;
-
-    try {
-
-        await Promise.race([
-            entersState(
-                connection,
-                VoiceConnectionStatus.Signalling,
-                RECOVER_TIMEOUT_MS
-            ),
-            entersState(
-                connection,
-                VoiceConnectionStatus.Connecting,
-                RECOVER_TIMEOUT_MS
-            )
-        ]);
-
-    } catch {
-
-        const currentSession =
-            sessions.get(guildId);
-
-        if (
-            currentSession?.connection ===
-            connection
-        ) {
-
-            scheduleReconnect(
-                guildId,
-                "disconnected"
-            );
-        }
-
-    } finally {
-
-        const currentSession =
-            sessions.get(guildId);
-
-        if (
-            currentSession?.connection ===
-            connection
-        ) {
-
-            currentSession.recovering =
-                false;
-        }
-    }
-}
-
-function watchConnection(
-    connection,
-    guildId
-) {
-
-    if (
-        watchedConnections.has(connection)
-    ) return;
-
-    watchedConnections.add(
-        connection
-    );
-
-    connection.on(
-        "stateChange",
-        (oldState, newState) => {
-
-            if (
-                newState.status ===
-                VoiceConnectionStatus.Disconnected
-            ) {
-
-                recoverDisconnectedConnection(
-                    connection,
-                    guildId
-                ).catch(console.error);
-            }
-
-            if (
-                newState.status ===
-                VoiceConnectionStatus.Destroyed
-            ) {
-
-                const session =
-                    sessions.get(guildId);
-
-                if (
-                    session?.connection ===
-                    connection
-                ) {
-
-                    scheduleReconnect(
-                        guildId,
-                        "destroyed"
-                    );
-                }
-            }
-        }
-    );
+    session.reconnectTimer.unref?.();
 }
 
 async function connectToVoiceChannel(
@@ -533,7 +285,6 @@ async function connectToVoiceChannel(
         null;
 
     let connection;
-    let player;
 
     if (
         currentConnection &&
@@ -547,67 +298,48 @@ async function connectToVoiceChannel(
         connection =
             currentConnection;
 
-        player =
-            currentSession?.player ||
-            createKeepAlivePlayer(guildId);
-
     } else {
 
         clearReconnectTimer(
             currentSession
         );
 
-        stopPlayer(
-            currentSession?.player
-        );
-
         sessions.delete(guildId);
 
-        if (currentConnection) {
-
-            destroyConnection(
-                currentConnection
-            );
-        }
+        destroyConnection(
+            currentConnection
+        );
 
         connection =
             joinVoiceChannel({
                 channelId:
                     channel.id,
                 guildId:
-                    channel.guild.id,
+                    guildId,
                 adapterCreator:
                     channel.guild.voiceAdapterCreator,
                 selfDeaf:
+                    true,
+                selfMute:
                     true
             });
-
-        player =
-            createKeepAlivePlayer(
-                guildId
-            );
     }
-
-    const session = {
-        guild:
-            channel.guild,
-        connection,
-        player,
-        voiceChannelId:
-            channel.id,
-        joinOwnerId:
-            joinOwnerId ||
-            previousJoinOwnerId ||
-            null,
-        reconnectTimer:
-            null,
-        recovering:
-            false
-    };
 
     sessions.set(
         guildId,
-        session
+        {
+            guild:
+                channel.guild,
+            connection,
+            voiceChannelId:
+                channel.id,
+            joinOwnerId:
+                joinOwnerId ||
+                previousJoinOwnerId ||
+                null,
+            reconnectTimer:
+                null
+        }
     );
 
     watchConnection(
@@ -615,28 +347,9 @@ async function connectToVoiceChannel(
         guildId
     );
 
-    ensurePlayerPlaying(
-        player
+    await waitUntilReady(
+        connection
     );
-
-    connection.subscribe(
-        player
-    );
-
-    try {
-
-        await entersState(
-            connection,
-            VoiceConnectionStatus.Ready,
-            READY_TIMEOUT_MS
-        );
-
-    } catch (error) {
-
-        logVoiceConnectError(
-            error
-        );
-    }
 
     return connection;
 }
@@ -652,21 +365,13 @@ function disconnectSession(guildId) {
         session
     );
 
-    stopPlayer(
-        session?.player
-    );
-
     destroyConnection(
         session?.connection
     );
 
-    const connection =
-        getVoiceConnection(guildId);
-
     destroyConnection(
-        connection
+        getVoiceConnection(guildId)
     );
-
 }
 
 async function handleVoiceConnectInteraction(interaction) {
@@ -814,16 +519,10 @@ async function handleVoiceStateUpdate(
         !newState.channelId
     ) {
 
-        const session =
-            sessions.get(guild.id);
-
-        if (session) {
-
-            scheduleReconnect(
-                guild.id,
-                "voice state left"
-            );
-        }
+        scheduleReconnect(
+            guild.id,
+            "voice state left"
+        );
     }
 
     if (
