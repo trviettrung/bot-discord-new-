@@ -1,241 +1,147 @@
-require("dotenv").config();
+const {
+    existsSync
+} = require("fs");
+
+const path =
+    require("path");
 
 const {
-    Client,
-    GatewayIntentBits,
-    Collection,
-    REST,
-    Routes
-} = require("discord.js");
+    spawn
+} = require("child_process");
 
-const fs = require("fs");
+const MIN_NODE_VERSION =
+    [22, 12, 0];
 
-const TOKEN = process.env.TOKEN;
-const CLIENT_ID = process.env.CLIENT_ID;
+function parseVersion(version) {
 
-if (!TOKEN) {
-    console.log("❌ Thiếu TOKEN trong file .env");
-    process.exit(1);
+    return version
+        .replace(/^v/, "")
+        .split(".")
+        .map(part => Number(part));
 }
 
-if (!CLIENT_ID) {
-    console.log("❌ Thiếu CLIENT_ID trong file .env");
-    process.exit(1);
+function isOlderThanMinVersion(version) {
+
+    const parts =
+        parseVersion(version);
+
+    for (
+        let index = 0;
+        index < MIN_NODE_VERSION.length;
+        index += 1
+    ) {
+
+        const current =
+            parts[index] || 0;
+
+        const minimum =
+            MIN_NODE_VERSION[index];
+
+        if (current < minimum) return true;
+        if (current > minimum) return false;
+    }
+
+    return false;
 }
 
-/*
-========================
-CLIENT
-========================
-*/
+function getLocalNodePath() {
 
-const client = new Client({
-    intents: [
-        GatewayIntentBits.Guilds,
-        GatewayIntentBits.GuildMessages,
-        GatewayIntentBits.MessageContent,
-        GatewayIntentBits.GuildVoiceStates
-    ]
-});
-
-/*
-========================
-LOAD COMMANDS
-========================
-*/
-
-client.commands = new Collection();
-
-const commands = [];
-const PRIMARY_ENTRY_POINT_COMMAND_TYPE = 4;
-
-const commandFiles = fs
-    .readdirSync("./commands")
-    .filter(file => file.endsWith(".js"));
-
-for (const file of commandFiles) {
-
-    const command = require(`./commands/${file}`);
-
-    client.commands.set(
-        command.data.name,
-        command
-    );
-
-    commands.push(
-        command.data.toJSON()
+    return path.join(
+        __dirname,
+        "node_modules",
+        "node",
+        "bin",
+        process.platform === "win32"
+            ? "node.exe"
+            : "node"
     );
 }
 
-/*
-========================
-REGISTER COMMANDS
-========================
-*/
+function runWithLocalNode() {
 
-const rest = new REST({
-    version: "10"
-}).setToken(TOKEN);
-
-function keepEntryPointCommand(command) {
-
-    const payload = {
-        name: command.name,
-        type: command.type
-    };
+    const localNodePath =
+        getLocalNodePath();
 
     if (
-        typeof command.description === "string"
+        !existsSync(localNodePath)
     ) {
 
-        payload.description =
-            command.description;
-    }
-
-    if (
-        command.name_localizations
-    ) {
-
-        payload.name_localizations =
-            command.name_localizations;
-    }
-
-    if (
-        command.description_localizations
-    ) {
-
-        payload.description_localizations =
-            command.description_localizations;
-    }
-
-    if (
-        command.default_member_permissions !== undefined
-    ) {
-
-        payload.default_member_permissions =
-            command.default_member_permissions;
-    }
-
-    if (
-        Array.isArray(command.contexts)
-    ) {
-
-        payload.contexts =
-            command.contexts;
-    }
-
-    if (
-        Array.isArray(command.integration_types)
-    ) {
-
-        payload.integration_types =
-            command.integration_types;
-    }
-
-    if (
-        typeof command.nsfw === "boolean"
-    ) {
-
-        payload.nsfw =
-            command.nsfw;
-    }
-
-    if (
-        command.handler !== undefined &&
-        command.handler !== null
-    ) {
-
-        payload.handler =
-            command.handler;
-    }
-
-    return payload;
-}
-
-async function getEntryPointCommands() {
-
-    const currentCommands =
-        await rest.get(
-            Routes.applicationCommands(CLIENT_ID)
+        console.error(
+            "Local Node 22 runtime is missing. Run npm install before starting the bot."
         );
 
-    if (
-        !Array.isArray(currentCommands)
-    ) return [];
+        process.exit(1);
+    }
 
-    return currentCommands
-        .filter(command =>
-            command.type ===
-            PRIMARY_ENTRY_POINT_COMMAND_TYPE
-        )
-        .map(keepEntryPointCommand);
-}
-
-(async () => {
-
-    try {
-
-        console.log("Registering commands...");
-
-        const entryPointCommands =
-            await getEntryPointCommands();
-
-        await rest.put(
-            Routes.applicationCommands(CLIENT_ID),
+    const child =
+        spawn(
+            localNodePath,
+            [
+                path.join(__dirname, "bot.js"),
+                ...process.argv.slice(2)
+            ],
             {
-                body: [
-                    ...commands,
-                    ...entryPointCommands
-                ]
+                stdio:
+                    "inherit",
+                env: {
+                    ...process.env,
+                    NOITU_LOCAL_NODE:
+                        "1"
+                }
             }
         );
 
-        console.log(
-            `Commands registered (${commands.length} slash, ${entryPointCommands.length} entry point kept)`
+    for (
+        const signal of ["SIGINT", "SIGTERM"]
+    ) {
+
+        process.on(
+            signal,
+            () => {
+
+                child.kill(signal);
+            }
         );
-
-    } catch (err) {
-
-        console.log(err);
     }
 
-})();
+    child.on(
+        "error",
+        error => {
 
-/*
-========================
-LOAD EVENTS
-========================
-*/
+            console.error(error);
+            process.exit(1);
+        }
+    );
 
-const eventFiles = fs
-    .readdirSync("./events")
-    .filter(file => file.endsWith(".js"));
+    child.on(
+        "exit",
+        (code, signal) => {
 
-for (const file of eventFiles) {
+            if (signal === "SIGINT") {
 
-    const event = require(`./events/${file}`);
+                process.exit(130);
+            }
 
-    client.on(
-        event.name,
+            if (signal === "SIGTERM") {
 
-        (...args) => {
+                process.exit(143);
+            }
 
-            Promise
-                .resolve(
-                    event.execute(
-                        ...args,
-                        client
-                    )
-                )
-                .catch(console.error);
+            process.exit(
+                code ?? 1
+            );
         }
     );
 }
 
-/*
-========================
-LOGIN
-========================
-*/
+if (
+    process.env.NOITU_LOCAL_NODE !== "1" &&
+    isOlderThanMinVersion(process.version)
+) {
 
-client.login(TOKEN);
+    runWithLocalNode();
+
+} else {
+
+    require("./bot");
+}
