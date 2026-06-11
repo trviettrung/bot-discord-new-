@@ -103,6 +103,17 @@ function getVoiceConnectErrorMessage(error) {
 
 function logVoiceConnectError(error) {
 
+    if (
+        isAbortError(error)
+    ) {
+
+        console.warn(
+            "Voice ready check aborted; keeping connection alive."
+        );
+
+        return;
+    }
+
     const reason =
         error?.code ||
         error?.name ||
