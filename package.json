@@ -1,24 +1,12 @@
 {
   "name": "noitu",
   "version": "1.0.0",
-  "description": "",
   "main": "index.js",
-  "scripts": {
-    "build:words": "node scripts/import-ver2-wordgraph.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
   "type": "commonjs",
-  "engines": {
-    "node": "22.12.0"
-  },
   "dependencies": {
-    "@discordjs/voice": "^0.19.2",
+    "@discordjs/voice": "^0.16.1",
     "discord.js": "^14.26.4",
-    "dotenv": "^17.4.2",
-    "node": "22.12.0"
+    "dotenv": "^17.4.2"
   },
   "overrides": {
     "ws": "8.21.0"
