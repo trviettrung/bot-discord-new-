@@ -51,23 +51,63 @@ function loadGames() {
     }
 }
 
+let saveTimeout = null;
+let isSaving = false;
+let needsSave = false;
+
+async function executeSave() {
+
+    if (isSaving) return;
+    isSaving = true;
+    needsSave = false;
+
+    try {
+
+        await fs.promises.mkdir(
+            dataDir,
+            { recursive: true }
+        );
+
+        const data =
+            JSON.stringify(
+                Object.fromEntries(games),
+                null,
+                4
+            );
+
+        await fs.promises.writeFile(
+            gamesFile,
+            data,
+            "utf8"
+        );
+
+    } catch (err) {
+
+        console.error(
+            "Lỗi ghi file wordconnect-games.json:",
+            err
+        );
+
+    } finally {
+
+        isSaving = false;
+        if (needsSave) {
+            saveGames();
+        }
+    }
+}
+
 function saveGames() {
 
-    fs.mkdirSync(
-        dataDir,
-        {
-            recursive: true
-        }
-    );
+    needsSave = true;
+    
+    if (isSaving) return;
 
-    fs.writeFileSync(
-        gamesFile,
-        JSON.stringify(
-            Object.fromEntries(games),
-            null,
-            4
-        )
-    );
+    if (saveTimeout) {
+        clearTimeout(saveTimeout);
+    }
+
+    saveTimeout = setTimeout(executeSave, 1000);
 }
 
 function createGame(

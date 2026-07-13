@@ -321,6 +321,8 @@ module.exports = {
                     });
                 }
 
+                await interaction.deferReply();
+
                 const channel =
                     await getPlayChannel(
                         interaction
@@ -328,10 +330,9 @@ module.exports = {
 
                 if (!channel) {
 
-                    return interaction.reply({
+                    return interaction.editReply({
                         content:
-                            "Không tìm thấy kênh chơi hợp lệ.",
-                        ephemeral: true
+                            "Không tìm thấy kênh chơi hợp lệ."
                     });
                 }
 
@@ -341,7 +342,7 @@ module.exports = {
                     word
                 );
 
-                return interaction.reply(
+                return interaction.editReply(
                     `Game bắt đầu tại ${channel}. Từ hiện tại: **${word}**`
                 );
             }

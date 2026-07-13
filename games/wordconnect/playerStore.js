@@ -114,26 +114,46 @@ function loadGuildData(guildId) {
     }
 }
 
+const saveTimeouts = new Map();
+const isSavingGuild = new Map();
+const needsSaveGuild = new Map();
+
+async function executeSaveGuild(guildId) {
+
+    if (isSavingGuild.get(guildId)) return;
+    isSavingGuild.set(guildId, true);
+    needsSaveGuild.set(guildId, false);
+
+    try {
+        await fs.promises.mkdir(playersDir, { recursive: true });
+        const data = loadGuildData(guildId);
+        await fs.promises.writeFile(
+            getGuildFile(guildId),
+            JSON.stringify(data, null, 4),
+            "utf8"
+        );
+    } catch (err) {
+        console.error(`Lỗi ghi data guild ${guildId}:`, err);
+    } finally {
+        isSavingGuild.set(guildId, false);
+        if (needsSaveGuild.get(guildId)) {
+            saveGuildData(guildId);
+        }
+    }
+}
+
 function saveGuildData(guildId) {
 
-    const data =
-        loadGuildData(guildId);
+    needsSaveGuild.set(guildId, true);
+    if (isSavingGuild.get(guildId)) return;
 
-    fs.mkdirSync(
-        playersDir,
-        {
-            recursive: true
-        }
-    );
+    if (saveTimeouts.has(guildId)) {
+        clearTimeout(saveTimeouts.get(guildId));
+    }
 
-    fs.writeFileSync(
-        getGuildFile(guildId),
-        JSON.stringify(
-            data,
-            null,
-            4
-        ),
-        "utf8"
+    saveTimeouts.set(
+        guildId,
+        setTimeout(() => executeSaveGuild(guildId), 1000)
     );
 }
 
