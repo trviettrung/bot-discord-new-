@@ -5,6 +5,8 @@ const {
 const botStatus =
     require("../config/status");
 
+const { startStatusLoop } = require("../utils/statusMonitor");
+
 module.exports = {
 
     name: Events.ClientReady,
@@ -18,5 +20,8 @@ module.exports = {
         console.log(
             `Bot ready: ${client.user.tag}`
         );
+
+        // Khởi chạy vòng lặp báo cáo trạng thái
+        startStatusLoop(client);
     }
 };
