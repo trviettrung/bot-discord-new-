@@ -381,55 +381,58 @@ async function handleVoiceConnectInteraction(interaction) {
 
     if (sub === "join") {
 
-        const voiceChannel =
-            getMemberVoiceChannel(interaction);
-
-        if (!voiceChannel) {
-
-            return interaction.reply({
-                content:
-                    "Bạn phải ở trong 1 voice để bot nhận diện.",
-                ephemeral: true
-            });
+        // Defer ngay lập tức để tránh hết hạn 3 giây
+        let deferred = false;
+        try {
+            await interaction.deferReply();
+            deferred = true;
+        } catch (err) {
+            // Interaction đã hết hạn, bỏ qua không xử lý tiếp
+            if (err.code === 10062) return;
+            throw err;
         }
-
-        if (
-            !botCanUseVoice(voiceChannel)
-        ) {
-
-            return interaction.reply({
-                content:
-                    "Bot thiếu quyền vào voice này.",
-                ephemeral: true
-            });
-        }
-
-        const session =
-            sessions.get(interaction.guild.id);
-
-        const connectedVoiceId =
-            getConnectedVoiceChannelId(
-                interaction.guild.id
-            ) ||
-            session?.voiceChannelId;
-
-        if (
-            connectedVoiceId &&
-            connectedVoiceId === voiceChannel.id &&
-            session?.joinOwnerId &&
-            session.joinOwnerId !== interaction.user.id
-        ) {
-
-            return interaction.reply({
-                content:
-                    "Bot đang ở voice này rồi. Chỉ người đã thêm bot mới dùng được lệnh out.",
-                ephemeral: true
-            });
-        }
-
-        await interaction.deferReply();
 
         try {
+
+            const voiceChannel =
+                getMemberVoiceChannel(interaction);
+
+            if (!voiceChannel) {
+
+                return interaction.editReply(
+                    "Bạn phải ở trong 1 voice để bot nhận diện."
+                );
+            }
+
+            if (
+                !botCanUseVoice(voiceChannel)
+            ) {
+
+                return interaction.editReply(
+                    "Bot thiếu quyền vào voice này."
+                );
+            }
+
+            const session =
+                sessions.get(interaction.guild.id);
+
+            const connectedVoiceId =
+                getConnectedVoiceChannelId(
+                    interaction.guild.id
+                ) ||
+                session?.voiceChannelId;
+
+            if (
+                connectedVoiceId &&
+                connectedVoiceId === voiceChannel.id &&
+                session?.joinOwnerId &&
+                session.joinOwnerId !== interaction.user.id
+            ) {
+
+                return interaction.editReply(
+                    "Bot đang ở voice này rồi. Chỉ người đã thêm bot mới dùng được lệnh out."
+                );
+            }
 
             await connectToVoiceChannel(
                 voiceChannel,
@@ -442,14 +445,10 @@ async function handleVoiceConnectInteraction(interaction) {
 
         } catch (error) {
 
-            logVoiceConnectError(
-                error
-            );
+            logVoiceConnectError(error);
 
             return interaction.editReply(
-                getVoiceConnectErrorMessage(
-                    error
-                )
+                getVoiceConnectErrorMessage(error)
             );
         }
     }
