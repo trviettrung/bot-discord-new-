@@ -376,50 +376,61 @@ function disconnectSession(guildId) {
 
 async function handleVoiceConnectInteraction(interaction) {
 
-    const sub =
-        interaction.options.getSubcommand();
+    // 1. Không xử lý cùng 1 interaction nhiều lần
+    if (!interaction || interaction._processing) return;
+    interaction._processing = true;
 
-    if (sub === "join") {
-
-        // Defer ngay lập tức để tránh hết hạn 3 giây
-        let deferred = false;
-        try {
+    // 2. Defer ngay lập tức ở đầu hàm, không để bất kỳ tác vụ await nào chạy trước
+    try {
+        if (!interaction.deferred && !interaction.replied) {
             await interaction.deferReply();
-            deferred = true;
-        } catch (err) {
-            // Interaction đã hết hạn, bỏ qua không xử lý tiếp
-            if (err.code === 10062) return;
-            throw err;
         }
+    } catch (deferErr) {
+        // Nếu defer lỗi (ví dụ Unknown interaction 10062), thoát luôn
+        return;
+    }
 
+    // Helper kiểm tra trạng thái interaction trước khi phản hồi
+    const sendResponse = async (payload) => {
         try {
+            const content = typeof payload === "string" ? { content: payload } : payload;
+            if (interaction.deferred) {
+                return await interaction.editReply(content);
+            } else if (interaction.replied) {
+                return await interaction.followUp(content);
+            } else {
+                return await interaction.reply(content);
+            }
+        } catch (replyErr) {
+            if (replyErr?.code === 10062 || replyErr?.code === 40060) return;
+            console.error("Lỗi khi phản hồi interaction:", replyErr);
+        }
+    };
+
+    // 3. Bao toàn bộ hàm trong try...catch
+    try {
+
+        const sub =
+            interaction.options.getSubcommand();
+
+        if (sub === "join") {
 
             const voiceChannel =
                 getMemberVoiceChannel(interaction);
 
             if (!voiceChannel) {
-
-                return interaction.editReply(
-                    "Bạn phải ở trong 1 voice để bot nhận diện."
-                );
+                return await sendResponse("Bạn phải ở trong 1 voice để bot nhận diện.");
             }
 
-            if (
-                !botCanUseVoice(voiceChannel)
-            ) {
-
-                return interaction.editReply(
-                    "Bot thiếu quyền vào voice này."
-                );
+            if (!botCanUseVoice(voiceChannel)) {
+                return await sendResponse("Bot thiếu quyền vào voice này.");
             }
 
             const session =
                 sessions.get(interaction.guild.id);
 
             const connectedVoiceId =
-                getConnectedVoiceChannelId(
-                    interaction.guild.id
-                ) ||
+                getConnectedVoiceChannelId(interaction.guild.id) ||
                 session?.voiceChannelId;
 
             if (
@@ -428,10 +439,7 @@ async function handleVoiceConnectInteraction(interaction) {
                 session?.joinOwnerId &&
                 session.joinOwnerId !== interaction.user.id
             ) {
-
-                return interaction.editReply(
-                    "Bot đang ở voice này rồi. Chỉ người đã thêm bot mới dùng được lệnh out."
-                );
+                return await sendResponse("Bot đang ở voice này rồi. Chỉ người đã thêm bot mới dùng được lệnh out.");
             }
 
             await connectToVoiceChannel(
@@ -439,66 +447,42 @@ async function handleVoiceConnectInteraction(interaction) {
                 interaction.user.id
             );
 
-            return interaction.editReply(
-                `Bot đã tham gia voice **${voiceChannel.name}**.`
-            );
-
-        } catch (error) {
-
-            logVoiceConnectError(error);
-
-            return interaction.editReply(
-                getVoiceConnectErrorMessage(error)
-            );
+            return await sendResponse(`Bot đã tham gia voice **${voiceChannel.name}**.`);
         }
+
+        if (sub === "out") {
+
+            const session =
+                sessions.get(interaction.guild.id);
+
+            const connectedVoiceId =
+                getConnectedVoiceChannelId(interaction.guild.id) ||
+                session?.voiceChannelId;
+
+            if (!connectedVoiceId) {
+                return await sendResponse("Bot hiện không ở trong voice.");
+            }
+
+            if (
+                session?.joinOwnerId &&
+                session.joinOwnerId !== interaction.user.id
+            ) {
+                return await sendResponse("Chỉ người đã thêm bot vào voice mới có thể dùng lệnh này.");
+            }
+
+            disconnectSession(interaction.guild.id);
+
+            return await sendResponse("Bot đã rời voice.");
+        }
+
+        return await sendResponse("Subcommand voiceconnect không hợp lệ.");
+
+    } catch (error) {
+
+        logVoiceConnectError(error);
+
+        return await sendResponse(getVoiceConnectErrorMessage(error));
     }
-
-    if (sub === "out") {
-
-        const session =
-            sessions.get(interaction.guild.id);
-
-        const connectedVoiceId =
-            getConnectedVoiceChannelId(
-                interaction.guild.id
-            ) ||
-            session?.voiceChannelId;
-
-        if (!connectedVoiceId) {
-
-            return interaction.reply({
-                content:
-                    "Bot hiện không ở trong voice.",
-                ephemeral: true
-            });
-        }
-
-        if (
-            session?.joinOwnerId &&
-            session.joinOwnerId !== interaction.user.id
-        ) {
-
-            return interaction.reply({
-                content:
-                    "Chỉ người đã thêm bot vào voice mới có thể dùng lệnh này.",
-                ephemeral: true
-            });
-        }
-
-        disconnectSession(
-            interaction.guild.id
-        );
-
-        return interaction.reply(
-            "Bot đã rời voice."
-        );
-    }
-
-    return interaction.reply({
-        content:
-            "Subcommand voiceconnect không hợp lệ.",
-        ephemeral: true
-    });
 }
 
 async function handleVoiceStateUpdate(
