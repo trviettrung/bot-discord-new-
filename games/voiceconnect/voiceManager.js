@@ -402,7 +402,17 @@ async function handleVoiceConnectInteraction(interaction) {
                 return await interaction.reply(content);
             }
         } catch (replyErr) {
-            if (replyErr?.code === 10062 || replyErr?.code === 40060) return;
+            if (replyErr?.code === 10062 || replyErr?.code === 40060 || replyErr?.code === 10008) {
+                // Nếu tin nhắn tạm bị xóa (10008), thử gửi tin nhắn mới qua channel/followUp
+                if (replyErr?.code === 10008) {
+                    try {
+                        return await interaction.followUp(content);
+                    } catch {
+                        // Bỏ qua nếu followUp cũng không gửi được
+                    }
+                }
+                return;
+            }
             console.error("Lỗi khi phản hồi interaction:", replyErr);
         }
     };
