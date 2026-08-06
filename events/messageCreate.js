@@ -27,8 +27,6 @@ const {
     "../games/wordconnect/playerStore"
 );
 
-const { handleStatusCommand } = require("../utils/statusMonitor");
-
 function react(
     message,
     emoji
@@ -124,15 +122,6 @@ module.exports = {
 
         if (message.author.bot)
             return;
-
-        /*
-        ========================
-        HANDLE STATUS COMMAND
-        ========================
-        */
-        if (await handleStatusCommand(message)) {
-            return;
-        }
 
         if (!message.guild)
             return;

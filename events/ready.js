@@ -5,8 +5,6 @@ const {
 const botStatus =
     require("../config/status");
 
-const { startStatusLoop } = require("../utils/statusMonitor");
-
 // Tự động set lại presence sau mỗi 30 phút
 // vì Discord định kỳ xóa trắng status sau khi reconnect
 const PRESENCE_REFRESH_MS = 30 * 60 * 1000;
@@ -32,9 +30,6 @@ module.exports = {
         console.log(
             `Bot ready: ${client.user.tag}`
         );
-
-        // Khởi chạy vòng lặp báo cáo trạng thái
-        startStatusLoop(client);
 
         // Set lại presence định kỳ mỗi 30 phút
         setInterval(() => applyPresence(client), PRESENCE_REFRESH_MS);
