@@ -123,6 +123,21 @@ module.exports = {
         if (message.author.bot)
             return;
 
+        /*
+        ========================
+        COMMAND: !qrTrung
+        ========================
+        */
+        const contentTrimmed = message.content.trim().toLowerCase();
+        if (contentTrimmed === "!qrtrung") {
+            const qrImagePath = path.join(__dirname, "..", "assets", "qr_trung.jpg");
+            if (fs.existsSync(qrImagePath)) {
+                return message.reply({
+                    files: [qrImagePath]
+                }).catch(console.error);
+            }
+        }
+
         if (!message.guild)
             return;
 
