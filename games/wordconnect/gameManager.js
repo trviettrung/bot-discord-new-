@@ -151,22 +151,31 @@ function saveGame(guildId) {
     }
 }
 
-function deleteGame(guildId) {
+function stopGame(guildId) {
+    const oldGame = getGame(guildId);
+    deleteGame(guildId);
+    return Boolean(oldGame);
+}
 
-    const deleted =
-        games.delete(
-            normalizeGuildId(guildId)
-        );
-
-    if (deleted) {
-
-        saveGames();
-    }
+function startGame(guildId, channel, word) {
+    stopGame(guildId);
+    const game = {
+        channelId: channel.id,
+        initialWord: word,
+        currentWord: word,
+        usedWords: [word],
+        lastPlayer: null,
+        turnCount: 0
+    };
+    createGame(guildId, game);
+    return game;
 }
 
 module.exports = {
     createGame,
     getGame,
     saveGame,
-    deleteGame
+    deleteGame,
+    startGame,
+    stopGame
 };
