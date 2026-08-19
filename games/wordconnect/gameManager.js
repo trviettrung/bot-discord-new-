@@ -151,6 +151,14 @@ function saveGame(guildId) {
     }
 }
 
+function deleteGame(guildId) {
+    const deleted = games.delete(normalizeGuildId(guildId));
+    if (deleted) {
+        saveGames();
+    }
+    return deleted;
+}
+
 function stopGame(guildId) {
     const oldGame = getGame(guildId);
     deleteGame(guildId);
