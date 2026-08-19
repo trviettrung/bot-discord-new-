@@ -541,15 +541,15 @@ async function handleVoiceMessageCommand(message) {
     const sub = (parts[1] || "").toLowerCase();
 
     let action = null;
-    if (cmd === "#join") {
+    if (cmd === "?join" || cmd === "#join") {
         action = "join";
-    } else if (cmd === "#out" || cmd === "#leave") {
+    } else if (cmd === "?out" || cmd === "?leave" || cmd === "#out" || cmd === "#leave") {
         action = "out";
-    } else if (cmd === "#voice" || cmd === "#voiceconnect") {
+    } else if (cmd === "?voice" || cmd === "?voiceconnect" || cmd === "#voice" || cmd === "#voiceconnect") {
         if (sub === "join") action = "join";
         else if (sub === "out" || sub === "leave") action = "out";
         else action = "help";
-    } else if (cmd === "#help") {
+    } else if (cmd === "?help" || cmd === "#help") {
         action = "help";
     } else {
         return false;
@@ -557,9 +557,9 @@ async function handleVoiceMessageCommand(message) {
 
     if (action === "help") {
         return message.reply(
-            "**Lệnh Voice (Dùng tiền tố `#`):**\n" +
-            "• `#join` (hoặc `#voiceconnect join`): Cho bot tham gia voice của bạn\n" +
-            "• `#out` (hoặc `#voiceconnect out`): Cho bot rời voice (người thêm bot hoặc Quản lý server)"
+            "**Lệnh Voice (Dùng tiền tố `?`):**\n" +
+            "• `?join` (hoặc `?voiceconnect join`): Cho bot tham gia voice của bạn\n" +
+            "• `?out` (hoặc `?voiceconnect out`): Cho bot rời voice (người thêm bot hoặc Quản lý server)"
         );
     }
 

@@ -81,4 +81,9 @@ LOGIN
 ========================
 */
 
-client.login(TOKEN);
+console.log("⏳ Đang kết nối tới Discord...");
+
+client.login(TOKEN).catch(err => {
+    console.error("❌ Lỗi khi đăng nhập bot vào Discord:", err);
+});
+

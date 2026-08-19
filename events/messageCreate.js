@@ -129,9 +129,9 @@ function getHelpMessage() {
     return [
         "**Danh sách lệnh Bot**",
         "",
-        "🎤 **Lệnh Voice (Dùng tiền tố `#`)**",
-        "• `#join` (hoặc `#voiceconnect join`): Cho bot tham gia voice của bạn.",
-        "• `#out` (hoặc `#voiceconnect out`): Cho bot rời voice.",
+        "🎤 **Lệnh Voice (Dùng tiền tố `?`)**",
+        "• `?join` (hoặc `?voiceconnect join`): Cho bot tham gia voice của bạn.",
+        "• `?out` (hoặc `?voiceconnect out`): Cho bot rời voice.",
         "",
         "🔤 **Lệnh Nối Từ (Dùng tiền tố `!`)**",
         "• `!start` (hoặc `!wordconnect start`): Bắt đầu ván nối từ tại kênh hiện tại.",
@@ -174,10 +174,10 @@ module.exports = {
 
         /*
         ============================================================
-        1. XỬ LÝ LỆNH VOICE (TIỀN TỐ #)
+        1. XỬ LÝ LỆNH VOICE (TIỀN TỐ ? HOẶC #)
         ============================================================
         */
-        if (rawContent.startsWith("#")) {
+        if (rawContent.startsWith("?") || rawContent.startsWith("#")) {
 
             const handled =
                 await handleVoiceMessageCommand(message);
