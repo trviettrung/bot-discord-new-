@@ -5,6 +5,10 @@ const {
 const botStatus =
     require("../config/status");
 
+const {
+    syncWordsFromGoogleSheet
+} = require("../games/wordconnect/wordGraph");
+
 // Tự động set lại presence sau mỗi 30 phút
 // vì Discord định kỳ xóa trắng status sau khi reconnect
 const PRESENCE_REFRESH_MS = 30 * 60 * 1000;
@@ -30,6 +34,11 @@ module.exports = {
         console.log(
             `Bot ready: ${client.user.tag}`
         );
+
+        // Đồng bộ từ điển từ Google Sheet
+        syncWordsFromGoogleSheet().catch(err => {
+            console.error("Lỗi đồng bộ Google Sheet:", err);
+        });
 
         // Set lại presence định kỳ mỗi 30 phút
         setInterval(() => applyPresence(client), PRESENCE_REFRESH_MS);

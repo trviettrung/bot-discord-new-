@@ -431,7 +431,64 @@ function addWordToRuntime(word) {
     }
 }
 
-function saveKnownWord(text) {
+const GOOGLE_SHEET_URL =
+    process.env.GOOGLE_SHEET_URL ||
+    "https://script.google.com/macros/s/AKfycbz_zf5CRKsYBb73Cz-OohhrvfZmDrnJSkSacD6flmN6Cb3b7AWiwpKjh4ypDV4F0SqD/exec";
+
+async function syncWordsFromGoogleSheet() {
+
+    if (!GOOGLE_SHEET_URL) return;
+
+    try {
+        console.log("⏳ Đang đồng bộ từ điển từ Google Sheet...");
+        const response = await fetch(GOOGLE_SHEET_URL, {
+            redirect: "follow"
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+
+        const data = await response.json();
+
+        if (Array.isArray(data?.words)) {
+            let addedCount = 0;
+            for (const rawWord of data.words) {
+                const word = normalizeWord(rawWord);
+                if (isTwoWord(word) && !isKnownWord(word)) {
+                    addWordToRuntime(word);
+                    appendWordIfMissing(manualWordsFile, word);
+                    addedCount++;
+                }
+            }
+            console.log(`✅ Đồng bộ thành công: ${data.words.length} từ trên Google Sheet (${addedCount} từ mới được nạp).`);
+        }
+    } catch (err) {
+        console.error("⚠️ Lỗi đồng bộ từ Google Sheet:", err.message || err);
+    }
+}
+
+async function saveWordToGoogleSheet(word) {
+
+    if (!GOOGLE_SHEET_URL) return;
+
+    try {
+        const response = await fetch(GOOGLE_SHEET_URL, {
+            method: "POST",
+            body: JSON.stringify({ word }),
+            headers: {
+                "Content-Type": "text/plain"
+            },
+            redirect: "follow"
+        });
+
+        return await response.json();
+    } catch (err) {
+        console.error("⚠️ Lỗi lưu từ lên Google Sheet:", err.message || err);
+    }
+}
+
+async function saveKnownWord(text) {
 
     const word =
         normalizeWord(text);
@@ -465,6 +522,9 @@ function saveKnownWord(text) {
 
     addWordToRuntime(word);
 
+    // Gửi lưu lên Google Sheet
+    await saveWordToGoogleSheet(word);
+
     return {
         ok: true,
         existed: false,
@@ -495,5 +555,6 @@ module.exports = {
     getNextWordCount,
     saveKnownWord,
     getLastWord,
-    checkConnect
+    checkConnect,
+    syncWordsFromGoogleSheet
 };

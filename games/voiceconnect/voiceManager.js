@@ -534,7 +534,89 @@ async function handleVoiceStateUpdate(
     }
 }
 
+async function handleVoiceMessageCommand(message) {
+    const content = message.content.trim();
+    const parts = content.split(/\s+/);
+    const cmd = parts[0].toLowerCase();
+    const sub = (parts[1] || "").toLowerCase();
+
+    let action = null;
+    if (cmd === "?join" || cmd === "#join") {
+        action = "join";
+    } else if (cmd === "?out" || cmd === "?leave" || cmd === "#out" || cmd === "#leave") {
+        action = "out";
+    } else if (cmd === "?voice" || cmd === "?voiceconnect" || cmd === "#voice" || cmd === "#voiceconnect") {
+        if (sub === "join") action = "join";
+        else if (sub === "out" || sub === "leave") action = "out";
+        else action = "help";
+    } else if (cmd === "?help" || cmd === "#help") {
+        action = "help";
+    } else {
+        return false;
+    }
+
+    if (action === "help") {
+        return message.reply(
+            "**Lệnh Voice:**\n" +
+            "• `?join` (hoặc `/voiceconnect join`): Cho bot tham gia voice của bạn\n" +
+            "• `?out` (hoặc `/voiceconnect out`): Cho bot rời voice (người thêm bot hoặc Quản lý server)"
+        );
+    }
+
+    if (action === "join") {
+        const voiceChannel = message.member?.voice?.channel;
+        if (!voiceChannel) {
+            return message.reply("Bạn phải ở trong 1 kênh voice để bot nhận diện.");
+        }
+
+        if (!botCanUseVoice(voiceChannel)) {
+            return message.reply("Bot thiếu quyền vào kênh voice này.");
+        }
+
+        const session = sessions.get(message.guild.id);
+        const connectedVoiceId = getConnectedVoiceChannelId(message.guild.id) || session?.voiceChannelId;
+
+        if (
+            connectedVoiceId &&
+            connectedVoiceId === voiceChannel.id &&
+            session?.joinOwnerId &&
+            session.joinOwnerId !== message.author.id
+        ) {
+            return message.reply("Bot đang ở voice này rồi. Chỉ người đã thêm bot mới dùng được lệnh out.");
+        }
+
+        try {
+            await connectToVoiceChannel(voiceChannel, message.author.id);
+            return message.reply(`Bot đã tham gia voice **${voiceChannel.name}**.`);
+        } catch (error) {
+            logVoiceConnectError(error);
+            return message.reply(getVoiceConnectErrorMessage(error));
+        }
+    }
+
+    if (action === "out") {
+        const session = sessions.get(message.guild.id);
+        const connectedVoiceId = getConnectedVoiceChannelId(message.guild.id) || session?.voiceChannelId;
+
+        if (!connectedVoiceId) {
+            return message.reply("Bot hiện không ở trong voice.");
+        }
+
+        const isOwner = session?.joinOwnerId === message.author.id;
+        const canManage = message.member?.permissions?.has(PermissionsBitField.Flags.ManageGuild);
+        if (!isOwner && !canManage && message.author.id !== "772059345990189066") {
+            return message.reply("Chỉ người đã thêm bot vào voice (hoặc Quản lý máy chủ) mới có thể dùng lệnh này.");
+        }
+
+        disconnectSession(message.guild.id);
+        return message.reply("Bot đã rời voice.");
+    }
+
+    return true;
+}
+
 module.exports = {
     handleVoiceConnectInteraction,
-    handleVoiceStateUpdate
+    handleVoiceStateUpdate,
+    handleVoiceMessageCommand
 };

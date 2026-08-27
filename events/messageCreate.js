@@ -27,6 +27,12 @@ const {
     "../games/wordconnect/playerStore"
 );
 
+const {
+    handleVoiceMessageCommand
+} = require(
+    "../games/voiceconnect/voiceManager"
+);
+
 function react(
     message,
     emoji
@@ -123,12 +129,26 @@ module.exports = {
         if (message.author.bot)
             return;
 
+        if (!message.guild)
+            return;
+
+        /*
+        ========================
+        VOICE COMMANDS (?join, ?out, etc.)
+        ========================
+        */
+        const rawContent = message.content.trim();
+        if (rawContent.startsWith("?") || rawContent.startsWith("#")) {
+            const handled = await handleVoiceMessageCommand(message);
+            if (handled) return;
+        }
+
         /*
         ========================
         COMMAND: !qrTrung
         ========================
         */
-        const contentTrimmed = message.content.trim().toLowerCase();
+        const contentTrimmed = rawContent.toLowerCase();
         if (contentTrimmed === "!qrtrung") {
             const qrImagePath = path.join(__dirname, "..", "assets", "qr_trung.jpg");
             if (fs.existsSync(qrImagePath)) {
@@ -137,9 +157,6 @@ module.exports = {
                 }).catch(console.error);
             }
         }
-
-        if (!message.guild)
-            return;
 
         /*
         ========================

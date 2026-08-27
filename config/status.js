@@ -8,7 +8,7 @@ module.exports = {
     activities: [
         {
             name:
-                "24/7",
+                "99% memory usage",
             type:
                 ActivityType.Watching
         }
