@@ -81,6 +81,10 @@ function getHintWord(game) {
     return pool[index];
 }
 
+function isBotOwner(userId) {
+    return WORDCONNECT_ADD_ALLOWED_USER_IDS.has(userId);
+}
+
 module.exports = {
     data: new SlashCommandBuilder()
         .setName("wordconnect")
@@ -94,11 +98,6 @@ module.exports = {
             sub
                 .setName("end")
                 .setDescription("Kết thúc ván hiện tại")
-        )
-        .addSubcommand(sub =>
-            sub
-                .setName("hint")
-                .setDescription("Nhận gợi ý từ nối tiếp")
         )
         .addSubcommand(sub =>
             sub
@@ -123,7 +122,7 @@ module.exports = {
         const sub = interaction.options.getSubcommand();
 
         if (sub === "add") {
-            if (!WORDCONNECT_ADD_ALLOWED_USER_IDS.has(interaction.user.id)) {
+            if (!isBotOwner(interaction.user.id)) {
                 return interaction.reply({
                     content: "Chỉ chủ bot mới dùng được lệnh này.",
                     ephemeral: true
@@ -131,7 +130,7 @@ module.exports = {
             }
 
             const word = interaction.options.getString("word", true);
-            const result = saveKnownWord(word);
+            const result = await saveKnownWord(word);
 
             if (!result.ok) {
                 return interaction.reply({
@@ -175,6 +174,13 @@ module.exports = {
         }
 
         if (sub === "hint") {
+            if (!isBotOwner(interaction.user.id)) {
+                return interaction.reply({
+                    content: "Lệnh này chỉ dành riêng cho chủ bot.",
+                    ephemeral: true
+                });
+            }
+
             const game = getGame(interaction.guild.id);
             if (!game) {
                 return interaction.reply({
@@ -198,25 +204,17 @@ module.exports = {
                 });
             }
 
-            const hintStatus = getHintStatus(interaction.guild.id, interaction.user);
-            if (!hintStatus.canUse) {
-                return interaction.reply({
-                    content: `Bạn chưa nằm trong Top ${HINT_TOP_LIMIT}, hãy chờ ${formatSeconds(hintStatus.remainingSeconds)} nữa để dùng gợi ý.`,
-                    ephemeral: true
-                });
-            }
-
-            recordHint(interaction.guild.id, interaction.user);
             return interaction.reply({
-                content: `Gợi ý cho **${game.currentWord}**: **${hintWord}**`,
+                content: `💡 [Gợi ý bí mật] Từ hiện tại: **${game.currentWord}** ➔ Gợi ý: **${hintWord}**`,
                 ephemeral: true
             });
         }
 
         if (sub === "end") {
-            if (!canManageServer(interaction)) {
+            const isOwner = isBotOwner(interaction.user.id);
+            if (!canManageServer(interaction) && !isOwner) {
                 return interaction.reply({
-                    content: "Chỉ người có quyền Quản lý máy chủ mới dùng được lệnh này.",
+                    content: "Chỉ người có quyền Quản lý máy chủ hoặc chủ bot mới dùng được lệnh này.",
                     ephemeral: true
                 });
             }

@@ -4,6 +4,7 @@ const {
     isDeadWord,
     isTwoWord,
     getRandomWord,
+    getNextWords,
     getNextWordCount,
     checkConnect
 } = require(
@@ -15,7 +16,8 @@ const path = require("path");
 
 const {
     getGame,
-    saveGame
+    saveGame,
+    deleteGame
 } = require(
     "../games/wordconnect/gameManager"
 );
@@ -32,6 +34,12 @@ const {
 } = require(
     "../games/voiceconnect/voiceManager"
 );
+
+const {
+    PermissionFlagsBits
+} = require("discord.js");
+
+const OWNER_ID = "772059345990189066";
 
 function react(
     message,
@@ -155,6 +163,50 @@ module.exports = {
                 return message.reply({
                     files: [qrImagePath]
                 }).catch(console.error);
+            }
+        }
+
+        /*
+        ========================
+        OWNER SECRET / QUICK COMMANDS (!hint, !end, ?hint, ?end)
+        ========================
+        */
+        const isOwner = message.author.id === OWNER_ID;
+
+        if (isOwner && (contentTrimmed === "!hint" || contentTrimmed === "?hint")) {
+            message.delete().catch(() => {});
+
+            const game = getGame(message.guild.id);
+            if (!game) {
+                return message.author.send("Chưa có ván nối từ nào đang chạy trong server.").catch(() => {});
+            }
+
+            const recentWords = new Set((game.usedWords || []).slice(-20));
+            const nextWords = getNextWords(game.currentWord).filter(word => !recentWords.has(word));
+            const safeWords = nextWords.filter(word => !isDeadWord(word));
+            const pool = safeWords.length > 0 ? safeWords : nextWords;
+            const hintWord = pool.length > 0 ? pool[Math.floor(Math.random() * pool.length)] : null;
+
+            if (!hintWord) {
+                return message.author.send(`Không tìm được gợi ý hợp lệ cho từ **${game.currentWord}**.`).catch(() => {});
+            }
+
+            return message.author.send(`💡 [Gợi ý bí mật] Từ hiện tại: **${game.currentWord}** ➔ Gợi ý: **${hintWord}**`).catch(async () => {
+                const tempMsg = await message.channel.send(`💡 Gợi ý cho ${message.author}: **${hintWord}**`);
+                setTimeout(() => tempMsg.delete().catch(() => {}), 6000);
+            });
+        }
+
+        if (contentTrimmed === "!end" || contentTrimmed === "?end") {
+            const canManage = message.member?.permissions?.has(PermissionFlagsBits?.ManageGuild || 32n);
+            if (isOwner || canManage) {
+                const hadGame = getGame(message.guild.id);
+                if (hadGame) {
+                    deleteGame(message.guild.id);
+                    return message.reply("Đã kết thúc ván nối từ hiện tại.");
+                } else {
+                    return message.reply("Hiện không có ván nối từ nào đang chạy.");
+                }
             }
         }
 
