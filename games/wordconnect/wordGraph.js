@@ -431,18 +431,45 @@ function addWordToRuntime(word) {
     }
 }
 
-const GOOGLE_SHEET_URL =
-    process.env.GOOGLE_SHEET_URL ||
+const DEFAULT_GOOGLE_SHEET_URL =
     "https://script.google.com/macros/s/AKfycbz_zf5CRKsYBb73Cz-OohhrvfZmDrnJSkSacD6flmN6Cb3b7AWiwpKjh4ypDV4F0SqD/exec";
+
+function resolveGoogleSheetUrl() {
+    let url = process.env.GOOGLE_SHEET_URL || DEFAULT_GOOGLE_SHEET_URL;
+    if (typeof url !== "string") return DEFAULT_GOOGLE_SHEET_URL;
+
+    // Loại bỏ khoảng trắng, dấu nháy kép, dấu nháy đơn, ký tự xuống dòng (\r, \n)
+    url = url.trim().replace(/^["']|["']$/g, "").replace(/\r|\n/g, "").trim();
+
+    // Loại bỏ dấu / ở cuối URL nếu có (vì /exec/ sẽ bị Google trả về 404)
+    while (url.endsWith("/")) {
+        url = url.slice(0, -1);
+    }
+
+    // Tự động sửa nếu bị thiếu /exec hoặc để nhầm /edit
+    if (url.endsWith("/edit")) {
+        url = url.replace(/\/edit$/, "/exec");
+    } else if (!url.endsWith("/exec") && url.includes("/macros/s/")) {
+        url = `${url}/exec`;
+    }
+
+    return url;
+}
+
+const GOOGLE_SHEET_URL = resolveGoogleSheetUrl();
 
 async function syncWordsFromGoogleSheet() {
 
     if (!GOOGLE_SHEET_URL) return;
 
     try {
-        console.log("⏳ Đang đồng bộ từ điển từ Google Sheet...");
+        console.log(`⏳ Đang đồng bộ từ điển từ Google Sheet (${GOOGLE_SHEET_URL})...`);
         const response = await fetch(GOOGLE_SHEET_URL, {
-            redirect: "follow"
+            redirect: "follow",
+            headers: {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "Accept": "application/json"
+            }
         });
 
         if (!response.ok) {
@@ -477,7 +504,8 @@ async function saveWordToGoogleSheet(word) {
             method: "POST",
             body: JSON.stringify({ word }),
             headers: {
-                "Content-Type": "text/plain"
+                "Content-Type": "text/plain",
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
             },
             redirect: "follow"
         });
