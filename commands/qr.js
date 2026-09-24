@@ -6,16 +6,17 @@ const fs = require("fs");
 const path = require("path");
 
 const qrData = {
-    trung: { file: "qr_trung.jpg", name: "Trần Việt Trung (ZaloPay)" },
-    quan: { file: "qr_quan.jpg", name: "Nguyễn Mạnh Quân (Techcombank)" },
-    duy: { file: "qr_duy.jpg", name: "Dấn Đức Duy (MBBank)" },
-    quang: { file: "qr_quang.png", name: "Trần Thanh Quang (Techcombank)" },
-    chau: { file: "qr_chau.jpg", name: "Lê Bảo Châu (MBBank)" },
-    dat: { file: "qr_dat.png", name: "Nguyễn Thành Đạt (Vietcombank)" },
-    anhvu: { file: "qr_anhvu.jpg", name: "Phạm Anh Vũ (MoMo)" },
-    trongvu: { file: "qr_trongvu.jpg", name: "Đào Trọng Vũ (MBBank)" },
-    ha: { file: "qr_ha.jpg", name: "Ma Thu Hà (MoMo)" },
-    duong: { file: "qr_duong.png", name: "Trần Hoàng Dương (MoMo)" }
+    trung: { file: "qr_trung.jpg", name: "Tờ Rung (ZaloPay)" },
+    quan: { file: "qr_quan.jpg", name: "Quân (Techcombank)" },
+    duy: { file: "qr_duy.jpg", name: "DuyDan (MBBank)" },
+    quang: { file: "qr_quang.png", name: "Anh Quảng (Techcombank)" },
+    chau: { file: "qr_chau.jpg", name: "libichi (MBBank)" },
+    dat: { file: "qr_dat.png", name: "Baron (Vietcombank)" },
+    anhvu: { file: "qr_anhvu.jpg", name: "Phvu (MoMo)" },
+    trongvu: { file: "qr_trongvu.jpg", name: "Zo (MBBank)" },
+    ha: { file: "qr_ha.jpg", name: "Minchim (MoMo)" },
+    duong: { file: "qr_duong.png", name: "Chân Giường (MoMo)" },
+    huynh: { file: "qr_huynh.jpg", name: "Bé Huỳnh(Vietcombank)" }
 };
 
 module.exports = {
@@ -37,7 +38,8 @@ module.exports = {
                     { name: "Anh Vũ (Phạm Anh Vũ - MoMo)", value: "anhvu" },
                     { name: "Trọng Vũ (Đào Trọng Vũ - MBBank)", value: "trongvu" },
                     { name: "Hà (Ma Thu Hà - MoMo)", value: "ha" },
-                    { name: "Dương (Trần Hoàng Dương - MoMo)", value: "duong" }
+                    { name: "Dương (Trần Hoàng Dương - MoMo)", value: "duong" },
+                    { name: "Bé Huỳnh (Huỳnh Minh Huyền Nhung - Vietcombank)", value: "huynh" }
                 )
         )
         .addStringOption(option =>
