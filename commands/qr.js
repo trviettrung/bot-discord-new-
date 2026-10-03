@@ -85,12 +85,8 @@ module.exports = {
             const imageUrl = await getFreshImageUrl(interaction.client, qr);
 
             const embed = new EmbedBuilder()
-                .setTitle(`💳 Mã QR: ${qr.name}`)
-                .setColor(0x00AE86)
-                .setDescription(`Mã QR thanh toán của <@${targetUser.id}>`)
-                .setImage(imageUrl)
-                .setFooter({ text: `Yêu cầu bởi ${interaction.user.tag}` })
-                .setTimestamp();
+                .setDescription(`Mã QR của **${targetUser.displayName || targetUser.username}**:`)
+                .setImage(imageUrl);
 
             return interaction.editReply({ embeds: [embed] });
         }
@@ -114,12 +110,8 @@ module.exports = {
         const row = new ActionRowBuilder().addComponents(selectMenu);
 
         const embed = new EmbedBuilder()
-            .setTitle(`💳 Mã QR: ${currentQR.name}`)
-            .setColor(0x00AE86)
-            .setDescription(`<@${targetUser.id}> có **${userQRs.length}** mã QR. Bạn có thể chọn loại QR khác ở menu bên dưới.`)
-            .setImage(imageUrl)
-            .setFooter({ text: `Yêu cầu bởi ${interaction.user.tag}` })
-            .setTimestamp();
+            .setDescription(`Mã QR của **${targetUser.displayName || targetUser.username}** (${currentQR.name}):`)
+            .setImage(imageUrl);
 
         const replyMessage = await interaction.editReply({
             embeds: [embed],
@@ -159,12 +151,8 @@ module.exports = {
             const updatedRow = new ActionRowBuilder().addComponents(updatedMenu);
 
             const updatedEmbed = new EmbedBuilder()
-                .setTitle(`💳 Mã QR: ${selectedQR.name}`)
-                .setColor(0x00AE86)
-                .setDescription(`<@${targetUser.id}> có **${userQRs.length}** mã QR. Bạn có thể chọn loại QR khác ở menu bên dưới.`)
-                .setImage(updatedImageUrl)
-                .setFooter({ text: `Yêu cầu bởi ${interaction.user.tag}` })
-                .setTimestamp();
+                .setDescription(`Mã QR của **${targetUser.displayName || targetUser.username}** (${selectedQR.name}):`)
+                .setImage(updatedImageUrl);
 
             await i.update({
                 embeds: [updatedEmbed],
@@ -173,7 +161,6 @@ module.exports = {
         });
 
         collector.on("end", async () => {
-            // Hết hạn thì vô hiệu hóa select menu
             try {
                 const disabledMenu = StringSelectMenuBuilder.from(selectMenu).setDisabled(true);
                 const disabledRow = new ActionRowBuilder().addComponents(disabledMenu);
