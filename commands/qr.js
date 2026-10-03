@@ -1,44 +1,42 @@
 const {
-    SlashCommandBuilder
+    SlashCommandBuilder,
+    EmbedBuilder,
+    ActionRowBuilder,
+    StringSelectMenuBuilder,
+    ComponentType
 } = require("discord.js");
 
-const fs = require("fs");
-const path = require("path");
+const googleSheets = require("../services/googleSheets");
 
-const qrData = {
-    trung: { file: "qr_trung.jpg", name: "Trần Việt Trung (ZaloPay)" },
-    quan: { file: "qr_quan.jpg", name: "Nguyễn Mạnh Quân (Techcombank)" },
-    duy: { file: "qr_duy.jpg", name: "Dấn Đức Duy (MBBank)" },
-    quang: { file: "qr_quang.png", name: "Trần Thanh Quang (Techcombank)" },
-    chau: { file: "qr_chau.jpg", name: "Lê Bảo Châu (MBBank)" },
-    dat: { file: "qr_dat.png", name: "Nguyễn Thành Đạt (Vietcombank)" },
-    anhvu: { file: "qr_anhvu.jpg", name: "Phạm Anh Vũ (MoMo)" },
-    trongvu: { file: "qr_trongvu.jpg", name: "Đào Trọng Vũ (MBBank)" },
-    ha: { file: "qr_ha.jpg", name: "Ma Thu Hà (MoMo)" },
-    duong: { file: "qr_duong.png", name: "Trần Hoàng Dương (MoMo)" }
-};
+const QR_STORAGE_CHANNEL_ID = process.env.QR_STORAGE_CHANNEL_ID || "1552752936252346420";
+
+async function getFreshImageUrl(client, qr) {
+    if (!qr.messageId) return qr.imageUrl;
+
+    try {
+        const channel = await client.channels.fetch(QR_STORAGE_CHANNEL_ID).catch(() => null);
+        if (channel && channel.isTextBased()) {
+            const message = await channel.messages.fetch(qr.messageId).catch(() => null);
+            if (message && message.attachments.size > 0) {
+                return message.attachments.first().url;
+            }
+        }
+    } catch (err) {
+        console.error(`Không thể lấy fresh URL cho message ${qr.messageId}:`, err.message);
+    }
+
+    return qr.imageUrl;
+}
 
 module.exports = {
     data: new SlashCommandBuilder()
         .setName("qr")
-        .setDescription("Lấy mã QR (Của các TV Nghịch Tử)")
-        .addStringOption(option =>
+        .setDescription("Xem mã QR thanh toán của thành viên trong server")
+        .addUserOption(option =>
             option
                 .setName("nguoi")
-                .setDescription("Chọn người")
-                .setRequired(true)
-                .addChoices(
-                    { name: "Trung (Trần Việt Trung - ZaloPay)", value: "trung" },
-                    { name: "Quân (Nguyễn Mạnh Quân - Techcombank)", value: "quan" },
-                    { name: "Duy (Đan Đức Duy - MBBank)", value: "duy" },
-                    { name: "Quang (Trần Thanh Quảng - Techcombank)", value: "quang" },
-                    { name: "Châu (Lê Bảo Châu - MBBank)", value: "chau" },
-                    { name: "Đạt (Nguyễn Thành Đạt - Vietcombank)", value: "dat" },
-                    { name: "Anh Vũ (Phạm Anh Vũ - MoMo)", value: "anhvu" },
-                    { name: "Trọng Vũ (Đào Trọng Vũ - MBBank)", value: "trongvu" },
-                    { name: "Hà (Ma Thu Hà - MoMo)", value: "ha" },
-                    { name: "Dương (Trần Hoàng Dương - MoMo)", value: "duong" }
-                )
+                .setDescription("Chọn người muốn lấy mã QR (để trống để lấy của chính bạn)")
+                .setRequired(false)
         )
         .addStringOption(option =>
             option
@@ -52,30 +50,139 @@ module.exports = {
         ),
 
     async execute(interaction) {
-        const personKey = interaction.options.getString("nguoi", true);
+        if (!interaction.guild) {
+            return interaction.reply({
+                content: "❌ Lệnh này chỉ dùng được trong Server Discord.",
+                ephemeral: true
+            });
+        }
+
+        const targetUser = interaction.options.getUser("nguoi") || interaction.user;
         const mode = interaction.options.getString("che_do") || "public";
         const isEphemeral = mode === "private";
 
-        // 1. Phản hồi defer ngay lập tức để không bị lỗi 10062 (hết hạn 3 giây)
         await interaction.deferReply({ ephemeral: isEphemeral });
 
-        const person = qrData[personKey];
-        if (!person) {
-            return interaction.editReply({
-                content: "Không tìm thấy thông tin mã QR của người này."
-            });
+        // 1. Tìm QR của người này trong Server hiện tại trên Google Sheets
+        const userQRs = await googleSheets.getQRList({
+            guildId: interaction.guild.id,
+            userId: targetUser.id
+        });
+
+        if (userQRs.length === 0) {
+            const isSelf = targetUser.id === interaction.user.id;
+
+            const responseText = isSelf
+                ? "❌ Bạn chưa có mã QR nào được lưu trong server này.\n👉 Dùng lệnh `/add qr` để thêm mã QR mới!"
+                : `❌ Thành viên **${targetUser.displayName || targetUser.username}** chưa có mã QR nào trong server này.`;
+
+            return interaction.editReply({ content: responseText });
         }
 
-        const filePath = path.join(__dirname, "..", "assets", person.file);
-        if (!fs.existsSync(filePath)) {
-            return interaction.editReply({
-                content: `Không tìm thấy file ảnh QR cho **${person.name}**.`
-            });
+        // 2. Nếu người dùng chỉ có 1 mã QR
+        if (userQRs.length === 1) {
+            const qr = userQRs[0];
+            const imageUrl = await getFreshImageUrl(interaction.client, qr);
+
+            const embed = new EmbedBuilder()
+                .setTitle(`💳 Mã QR: ${qr.name}`)
+                .setColor(0x00AE86)
+                .setDescription(`Mã QR thanh toán của <@${targetUser.id}>`)
+                .setImage(imageUrl)
+                .setFooter({ text: `Yêu cầu bởi ${interaction.user.tag}` })
+                .setTimestamp();
+
+            return interaction.editReply({ embeds: [embed] });
         }
 
-        return interaction.editReply({
-            content: `💳 **Mã QR của ${person.name}:**`,
-            files: [filePath]
+        // 3. Nếu người dùng có nhiều mã QR (ví dụ nhiều ngân hàng)
+        let currentQR = userQRs[0];
+        let imageUrl = await getFreshImageUrl(interaction.client, currentQR);
+
+        const selectOptions = userQRs.map(q => ({
+            label: q.name.length > 100 ? q.name.substring(0, 97) + "..." : q.name,
+            description: `Mã số: #${q.id}`,
+            value: String(q.id),
+            default: q.id === currentQR.id
+        }));
+
+        const selectMenu = new StringSelectMenuBuilder()
+            .setCustomId(`qr_select_${interaction.id}`)
+            .setPlaceholder("Chọn loại mã QR muốn xem...")
+            .addOptions(selectOptions);
+
+        const row = new ActionRowBuilder().addComponents(selectMenu);
+
+        const embed = new EmbedBuilder()
+            .setTitle(`💳 Mã QR: ${currentQR.name}`)
+            .setColor(0x00AE86)
+            .setDescription(`<@${targetUser.id}> có **${userQRs.length}** mã QR. Bạn có thể chọn loại QR khác ở menu bên dưới.`)
+            .setImage(imageUrl)
+            .setFooter({ text: `Yêu cầu bởi ${interaction.user.tag}` })
+            .setTimestamp();
+
+        const replyMessage = await interaction.editReply({
+            embeds: [embed],
+            components: [row]
+        });
+
+        // Tạo collector lắng nghe lựa chọn menu trong 60 giây
+        const collector = replyMessage.createMessageComponentCollector({
+            componentType: ComponentType.StringSelect,
+            time: 60000
+        });
+
+        collector.on("collect", async i => {
+            if (i.user.id !== interaction.user.id) {
+                return i.reply({
+                    content: "Chỉ người gõ lệnh mới có thể thao tác menu này.",
+                    ephemeral: true
+                });
+            }
+
+            const selectedId = i.values[0];
+            const selectedQR = userQRs.find(q => String(q.id) === selectedId) || userQRs[0];
+            const updatedImageUrl = await getFreshImageUrl(interaction.client, selectedQR);
+
+            const updatedOptions = userQRs.map(q => ({
+                label: q.name.length > 100 ? q.name.substring(0, 97) + "..." : q.name,
+                description: `Mã số: #${q.id}`,
+                value: String(q.id),
+                default: q.id === selectedQR.id
+            }));
+
+            const updatedMenu = new StringSelectMenuBuilder()
+                .setCustomId(`qr_select_${interaction.id}`)
+                .setPlaceholder("Chọn loại mã QR muốn xem...")
+                .addOptions(updatedOptions);
+
+            const updatedRow = new ActionRowBuilder().addComponents(updatedMenu);
+
+            const updatedEmbed = new EmbedBuilder()
+                .setTitle(`💳 Mã QR: ${selectedQR.name}`)
+                .setColor(0x00AE86)
+                .setDescription(`<@${targetUser.id}> có **${userQRs.length}** mã QR. Bạn có thể chọn loại QR khác ở menu bên dưới.`)
+                .setImage(updatedImageUrl)
+                .setFooter({ text: `Yêu cầu bởi ${interaction.user.tag}` })
+                .setTimestamp();
+
+            await i.update({
+                embeds: [updatedEmbed],
+                components: [updatedRow]
+            });
+        });
+
+        collector.on("end", async () => {
+            // Hết hạn thì vô hiệu hóa select menu
+            try {
+                const disabledMenu = StringSelectMenuBuilder.from(selectMenu).setDisabled(true);
+                const disabledRow = new ActionRowBuilder().addComponents(disabledMenu);
+                await interaction.editReply({
+                    components: [disabledRow]
+                });
+            } catch {
+                // Ignore if message was deleted
+            }
         });
     }
 };

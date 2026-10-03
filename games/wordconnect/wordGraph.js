@@ -431,100 +431,34 @@ function addWordToRuntime(word) {
     }
 }
 
-const DEFAULT_GOOGLE_SHEET_URL =
-    "https://script.google.com/macros/s/AKfycbz_zf5CRKsYBb73Cz-OohhrvfZmDrnJSkSacD6flmN6Cb3b7AWiwpKjh4ypDV4F0SqD/exec";
-
-function resolveGoogleSheetUrl() {
-    let url = process.env.GOOGLE_SHEET_URL || DEFAULT_GOOGLE_SHEET_URL;
-    if (typeof url !== "string") return DEFAULT_GOOGLE_SHEET_URL;
-
-    // Loại bỏ khoảng trắng, dấu nháy kép, dấu nháy đơn, ký tự xuống dòng (\r, \n)
-    url = url.trim().replace(/^["']|["']$/g, "").replace(/\r|\n/g, "").trim();
-
-    // Loại bỏ dấu / ở cuối URL nếu có (vì /exec/ sẽ bị Google trả về 404)
-    while (url.endsWith("/")) {
-        url = url.slice(0, -1);
-    }
-
-    // Tự động sửa nếu bị thiếu /exec hoặc để nhầm /edit
-    if (url.endsWith("/edit")) {
-        url = url.replace(/\/edit$/, "/exec");
-    } else if (!url.endsWith("/exec") && url.includes("/macros/s/")) {
-        url = `${url}/exec`;
-    }
-
-    return url;
-}
-
-const GOOGLE_SHEET_URL = resolveGoogleSheetUrl();
+const googleSheets = require("../../services/googleSheets");
 
 async function syncWordsFromGoogleSheet() {
-
-    if (!GOOGLE_SHEET_URL) return;
-
     try {
-        console.log(`⏳ Đang đồng bộ từ điển từ Google Sheet (${GOOGLE_SHEET_URL})...`);
-        const response = await fetch(GOOGLE_SHEET_URL, {
-            redirect: "follow",
-            headers: {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                "Accept": "application/json"
-            }
-        });
+        console.log("⏳ Đang đồng bộ từ điển từ Google Sheet (tab Words)...");
+        const wordsList = await googleSheets.getAllWords();
 
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
-        }
-
-        const data = await response.json();
-
-        if (Array.isArray(data?.words)) {
+        if (Array.isArray(wordsList)) {
             let addedCount = 0;
-            for (const rawWord of data.words) {
-                const word = normalizeWord(rawWord);
+            for (const item of wordsList) {
+                const word = normalizeWord(item.word);
                 if (isTwoWord(word) && !isKnownWord(word)) {
                     addWordToRuntime(word);
                     appendWordIfMissing(manualWordsFile, word);
                     addedCount++;
                 }
             }
-            console.log(`✅ Đồng bộ thành công: ${data.words.length} từ trên Google Sheet (${addedCount} từ mới được nạp).`);
+            console.log(`✅ Đồng bộ thành công: ${wordsList.length} từ trên Google Sheet (${addedCount} từ mới được nạp vào Graph).`);
         }
     } catch (err) {
         console.error("⚠️ Lỗi đồng bộ từ Google Sheet:", err.message || err);
     }
 }
 
-async function saveWordToGoogleSheet(word) {
+async function saveKnownWord(text, addedBy = "") {
+    const word = normalizeWord(text);
 
-    if (!GOOGLE_SHEET_URL) return;
-
-    try {
-        const response = await fetch(GOOGLE_SHEET_URL, {
-            method: "POST",
-            body: JSON.stringify({ word }),
-            headers: {
-                "Content-Type": "text/plain",
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-            },
-            redirect: "follow"
-        });
-
-        return await response.json();
-    } catch (err) {
-        console.error("⚠️ Lỗi lưu từ lên Google Sheet:", err.message || err);
-    }
-}
-
-async function saveKnownWord(text) {
-
-    const word =
-        normalizeWord(text);
-
-    if (
-        !isValidManualWord(word)
-    ) {
-
+    if (!isValidManualWord(word)) {
         return {
             ok: false,
             reason: "invalid",
@@ -532,10 +466,7 @@ async function saveKnownWord(text) {
         };
     }
 
-    if (
-        isKnownWord(word)
-    ) {
-
+    if (isKnownWord(word)) {
         return {
             ok: true,
             existed: true,
@@ -543,15 +474,21 @@ async function saveKnownWord(text) {
         };
     }
 
-    appendWordIfMissing(
-        manualWordsFile,
-        word
-    );
+    // 1. Lưu cục bộ để phục hồi offline
+    appendWordIfMissing(manualWordsFile, word);
 
+    // 2. Thêm vào bộ nhớ runtime/Word Graph ngay lập tức
     addWordToRuntime(word);
 
-    // Gửi lưu lên Google Sheet
-    await saveWordToGoogleSheet(word);
+    // 3. Gửi lưu lên Google Sheet
+    try {
+        await googleSheets.addWordToSheet({
+            word,
+            addedBy
+        });
+    } catch (err) {
+        console.error("⚠️ Không thể ghi từ lên Google Sheet:", err.message);
+    }
 
     return {
         ok: true,
@@ -578,6 +515,7 @@ module.exports = {
     isKnownWord,
     isDeadWord,
     isTwoWord,
+    isValidManualWord,
     getRandomWord,
     getNextWords,
     getNextWordCount,

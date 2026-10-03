@@ -40,6 +40,18 @@ module.exports = {
             console.error("Lỗi đồng bộ Google Sheet:", err);
         });
 
+        // Đồng bộ danh sách Servers lên Google Sheet
+        const googleSheets = require("../services/googleSheets");
+        for (const guild of client.guilds.cache.values()) {
+            googleSheets.upsertServer({
+                guildId: guild.id,
+                guildName: guild.name,
+                ownerId: guild.ownerId,
+                joinedAt: guild.joinedTimestamp,
+                enabled: true
+            }).catch(err => console.error(`Lỗi cập nhật Server ${guild.name} lên Sheet:`, err.message));
+        }
+
         // Set lại presence định kỳ mỗi 30 phút
         setInterval(() => applyPresence(client), PRESENCE_REFRESH_MS);
 

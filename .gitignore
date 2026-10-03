@@ -5,4 +5,5 @@ npm-debug.log*
 data/rejected-player-words.txt
 data/wordconnect-games.json
 data/wordconnect-players/*.json
+google-credentials.json
 
