@@ -50,18 +50,19 @@ module.exports = {
         ),
 
     async execute(interaction) {
-        if (!interaction.guild) {
-            return interaction.reply({
-                content: "❌ Lệnh này chỉ dùng được trong Server Discord.",
-                ephemeral: true
-            });
-        }
-
-        const targetUser = interaction.options.getUser("nguoi") || interaction.user;
+        // Defer ngay lập tức để tránh lỗi 10062 Unknown Interaction (3 giây timeout)
         const mode = interaction.options.getString("che_do") || "public";
         const isEphemeral = mode === "private";
 
         await interaction.deferReply({ ephemeral: isEphemeral });
+
+        if (!interaction.guild) {
+            return interaction.editReply({
+                content: "❌ Lệnh này chỉ dùng được trong Server Discord."
+            });
+        }
+
+        const targetUser = interaction.options.getUser("nguoi") || interaction.user;
 
         // 1. Tìm QR của người này trong Server hiện tại trên Google Sheets
         const userQRs = await googleSheets.getQRList({
